@@ -1,0 +1,9 @@
+name := "onedot"
+
+version := "0.1"
+
+scalaVersion := "2.13.1"
+
+resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
+
+libraryDependencies += "com.typesafe" % "config" % "1.4.0"
