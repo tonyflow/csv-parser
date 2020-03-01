@@ -8,7 +8,7 @@ object Settings {
   private val config = ConfigFactory.load("parser")
   val quotingString = config.getString(QUOTING_STRING)
   val lineSeparator = config.getString(LINE_SEPARATOR)
-  val fieldDelimiter = config.getConfig(FIELD_DELIMITER)
+  val fieldDelimiter = config.getString(FIELD_DELIMITER)
 
 }
 
