@@ -14,7 +14,7 @@ object Settings {
 
 
 object SettingConstants {
-  final val QUOTING_STRING = "quoting-string"
-  final val LINE_SEPARATOR = "line-separator"
-  final val FIELD_DELIMITER = "field-delimiter"
+  final val QUOTING_STRING = "csv.quoting-string"
+  final val LINE_SEPARATOR = "csv.line-separator"
+  final val FIELD_DELIMITER = "csv.field-delimiter"
 }
