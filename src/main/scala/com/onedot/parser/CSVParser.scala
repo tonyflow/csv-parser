@@ -2,62 +2,121 @@ package com.onedot.parser
 
 import java.io.{File, RandomAccessFile}
 
+import com.onedot.helper.Settings
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.io.Source
+import scala.util.matching.Regex
+import scala.util.matching.Regex.MatchIterator
 
+/**
+ *
+ */
 object CSVParser {
 
   private final val logger: Logger = Logger(LoggerFactory.getLogger(getClass))
 
-  private val NUMBER_OF_CHUNKS = 10
+  /**
+   * This is the number of chunks a large file will be broken into to be processed. In other words, this is the number
+   * of [[Future]]s or threads that we will create in order to process the file.
+   */
+  private val NUMBER_OF_CHUNKS = 15
 
+  /**
+   * Match empty fields in the beginning, the middle or the end of a line
+   */
+  private val MISSING_CELLS: Regex = "(^,)|(,,)|(,$)".r
+
+
+  /**
+   *
+   * @param filename Name of the file to be processed
+   * @return Returns a [[LazyList]] of [[Vector]]s. The [[Vector]]s represent the tuples the CSV fields have been mapped
+   *         to in order to be processed by the API.
+   */
   def parse(filename: String): Future[LazyList[Vector[String]]] = {
     val url = getClass.getResource(filename)
     val file = Source.fromURL(url)
     val length = file.getLines().size
-    val linesPerExecutor = length / NUMBER_OF_CHUNKS
 
-    val ranges = Range(start = 0, end = length + 1, step = linesPerExecutor).iterator
-      .sliding(2)
-      .toVector
-      .map(twoElementList => (twoElementList.head, twoElementList.last)) // max + 1 since it is exclusive
 
-    val processedChunks = ranges.collect {
-      case (start, end) =>
+    length / NUMBER_OF_CHUNKS match {
+      case 0 => //No need to create ranges since file is less than 15 lines long
         Future {
-          logger.info(s"Thread ${Thread.currentThread()} reading from $start to $end")
-          Source.fromURL(url).getLines().to(LazyList)
-            .drop(start)
-            .take(end - start)
-            .foldLeft(LazyList.empty[Vector[String]]) {
-              (acc, line) => acc :+ line.split(",").toVector
+          Source.fromURL(url).getLines().foldLeft(LazyList.empty[Vector[String]]) {
+            (acc, line) => processLine(acc, line)
+          }
+        }
+      case linesPerExecutor =>
+        // Break down file in chunks and process them in parallel. This can be a bit dangerous since there might be cases
+        // when single cells including new lines could be processed by different threads.
+        val ranges = Range(start = 0, end = length + 1, step = linesPerExecutor).iterator
+          .sliding(2)
+          .toVector
+          .map(twoElementList => (twoElementList.head, twoElementList.last)) // max + 1 since it is exclusive
+
+        val processedChunks = ranges.collect {
+          case (start, end) =>
+            Future {
+              logger.info(s"Thread ${Thread.currentThread()} reading from $start to $end")
+              Source.fromURL(url).getLines().to(LazyList)
+                .drop(start)
+                .take(end - start)
+                .foldLeft(LazyList.empty[Vector[String]]) {
+                  (acc, line) =>
+                    // We are appending on the lazy list so in order to merge a previous line that ended with \n and
+                    // a new one that started with \n the process line needs both
+                    processLine(acc, line)
+                }
             }
         }
+
+        // Create one single lazy list/stream out of the processed chunks
+        Future.foldLeft(processedChunks)(LazyList.empty[Vector[String]])(_ ++ _)
     }
-
-    // Create one single lazy list/stream out of the processed chunks
-    Future.foldLeft(processedChunks)(LazyList.empty[Vector[String]])(_ ++ _)
-
-
   }
 
-  def byteParsing(filename: String) = {
-    val defaultBlockSize = 1 * 1024 * 1024
+  private def areQuotesBalanced(token: String) = token.toCharArray.count(_ == '\"') % 2 == 0
 
-    val url = getClass.getResource(filename)
-    val file = new File(url.getPath)
-    val randomAccessFile = new RandomAccessFile(file, "r")
-    try {
-      (randomAccessFile.length / defaultBlockSize).toInt
-    } finally {
-      randomAccessFile.close
+  private def processLine(accumulator: LazyList[Vector[String]],
+                          line: String): LazyList[Vector[String]] = {
+
+    // Identify line with missing cells
+    MISSING_CELLS.findAllIn(line) match {
+      case emptyIterator: MatchIterator if emptyIterator.isEmpty =>
+        // Process field delimiters inside quoted text
+        val naiveSplit = line.split(",").toVector
+        val firstIndexOfDoubleQuote = naiveSplit.indexWhere(_.contains('\"'))
+        val lastIndexOfDoubleQuote = naiveSplit.lastIndexWhere(_.contains('\"'))
+        val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1) {
+          val start = naiveSplit.slice(0, firstIndexOfDoubleQuote)
+          val tail = naiveSplit.slice(lastIndexOfDoubleQuote + 1, naiveSplit.size)
+          val mergedCells = naiveSplit.slice(firstIndexOfDoubleQuote, lastIndexOfDoubleQuote + 1).mkString(Settings.fieldDelimiter)
+          (start :+ mergedCells) ++ tail
+        } else {
+          naiveSplit
+        }
+
+        // Process new line characters embedded in quoted cell
+        val previous = accumulator.lastOption
+        if (!areQuotesBalanced(tokens.head) && previous.isDefined) {
+          // Build split element
+          val updatedLastElement = s"${previous.get.last} ${tokens.head.replace("\n", "")}"
+          // Drop last element from the previous vector
+          val updatedLastCSVLine = (previous.get.dropRight(1) :+ updatedLastElement) ++ tokens.tail
+          accumulator.dropRight(1) :+ updatedLastCSVLine
+        } else {
+          accumulator :+ tokens
+        }
+
+      case missingCells: MatchIterator =>
+        val it = for (cells <- missingCells) yield cells
+        it.toVector
+        accumulator
     }
 
-    // Log dropped frames
-    logger.info("Could not process the following line of input")
   }
 }
