@@ -6,6 +6,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+/**
+ * Main spec for the [[CSVParser]]. Mainly testing the special cases that should be handled by the parser and some
+ * combinations of them.
+ */
 class CSVParserSpec extends AnyFlatSpec {
 
   "CSV Parser" should "read lines from the file" in {
@@ -36,15 +40,16 @@ class CSVParserSpec extends AnyFlatSpec {
     assert(result(0) == Vector("\"abc,\"onetwo", "three", "doremi"))
   }
 
-  it should "be able to parse the following combination: new line as quoted part of a cell" in {
+  ignore should "be able to parse the following combination: new line as quoted part of a cell" in {
 
   }
 
   it should "be able to process absent elements and new lines in quoted cells" in {
-    val result = Await.result(CSVParser.parse("/"), 1.minute)
+    val result = Await.result(CSVParser.parse("/combine-new-line-cell-characters-with-missing-fields.csv"), 1.minute)
+    assert(result(0) == Vector("", "\"a split cell\"", "b", "\"something else\""))
   }
 
-  it should "be able to process large files" in {
+  ignore should "be able to process large files" in {
 
   }
 
