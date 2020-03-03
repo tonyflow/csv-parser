@@ -12,6 +12,7 @@ object Settings {
   val quotingString = config.getString(QUOTING_STRING)
   val lineSeparator = config.getString(LINE_SEPARATOR)
   val fieldDelimiter = config.getString(FIELD_DELIMITER)
+  val hasHeader = config.getBoolean(HAS_HEADER)
 
 }
 
@@ -22,4 +23,5 @@ object SettingConstants {
   final val QUOTING_STRING = "csv.quoting-string"
   final val LINE_SEPARATOR = "csv.line-separator"
   final val FIELD_DELIMITER = "csv.field-delimiter"
+  final val HAS_HEADER = "csv.has-header"
 }
