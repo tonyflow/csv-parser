@@ -2,9 +2,9 @@ package com.onedot
 
 import com.onedot.parser.CSVParser
 import org.scalatest.flatspec.AnyFlatSpec
-import scala.concurrent.duration._
 
 import scala.concurrent.Await
+import scala.concurrent.duration._
 
 class CSVParserSpec extends AnyFlatSpec {
 
@@ -34,8 +34,6 @@ class CSVParserSpec extends AnyFlatSpec {
   it should "be able to parse a field which consists of a quoted cell" in {
     val result = Await.result(CSVParser.parse("/part-of-the-field-appears-as-quoted.csv"), 1.minute)
     assert(result(0) == Vector("\"abc,\"onetwo", "three", "doremi"))
-    result(0).foreach(println(_))
-    println(result(0).size)
   }
 
   it should "be able to parse the following combination: new line as quoted part of a cell" in {
@@ -43,7 +41,7 @@ class CSVParserSpec extends AnyFlatSpec {
   }
 
   it should "be able to process absent elements and new lines in quoted cells" in {
-
+    val result = Await.result(CSVParser.parse("/"), 1.minute)
   }
 
   it should "be able to process large files" in {

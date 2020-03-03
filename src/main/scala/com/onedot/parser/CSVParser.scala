@@ -10,7 +10,9 @@ import scala.io.Source
 import scala.util.matching.Regex
 
 /**
- *
+ * Provides an API for parsing CSV files. The parser breaks down the file into chunks if the size (lines) of the file
+ * is larger than the NUMBER_OF_CHUNKS and creates equal number of [[LazyList]] containing the result of the parsed
+ * lines from the file. All these are computed asynchronously using the [[Future]]s API.
  */
 object CSVParser {
 
@@ -35,6 +37,8 @@ object CSVParser {
    * resources of the [[CSVParser]] project - and returns a stream of the results to be consumed by the client. The
    * stream is represented by a LayList which will only be computed when actually needed.
    *
+   * Note: One of the returned lines might be the header of the file
+   *
    * @param filename Name of the file to be processed
    * @return Returns a [[LazyList]] of [[Vector]]s. The [[Vector]]s represent the tuples the CSV fields have been mapped
    *         to in order to be processed by the API.
@@ -43,7 +47,6 @@ object CSVParser {
     val url = getClass.getResource(filename)
     val file = Source.fromURL(url)
     val length = file.getLines().size
-
 
     val batchSize = length / NUMBER_OF_CHUNKS
     batchSize match {
@@ -86,7 +89,7 @@ object CSVParser {
   private def processLine(accumulator: LazyList[Vector[String]],
                           line: String): LazyList[Vector[String]] = {
     // Start with the naive splitting - split at every delimiter
-    val naiveSplit = line.split(",").toVector
+    val naiveSplit = line.split(Settings.fieldDelimiter).toVector
 
     // Identify line with missing cells
     val potentiallyMissingElements = MISSING_CELLS_AT_THE_END.findFirstIn(line) match {
@@ -99,8 +102,8 @@ object CSVParser {
     }
 
     // Process field delimiters inside quoted text
-    val firstIndexOfDoubleQuote = potentiallyMissingElements.indexWhere(_.contains('\"'))
-    val lastIndexOfDoubleQuote = potentiallyMissingElements.lastIndexWhere(_.contains('\"'))
+    val firstIndexOfDoubleQuote = potentiallyMissingElements.indexWhere(_.contains(Settings.quotingString))
+    val lastIndexOfDoubleQuote = potentiallyMissingElements.lastIndexWhere(_.contains(Settings.quotingString))
     val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1 && areQuotesBalanced(line)) {
       val start = potentiallyMissingElements.slice(0, firstIndexOfDoubleQuote)
       val tail = potentiallyMissingElements.slice(lastIndexOfDoubleQuote + 1, naiveSplit.size)
@@ -114,7 +117,7 @@ object CSVParser {
     val previous = accumulator.lastOption
     if (!areQuotesBalanced(tokens.head) && previous.isDefined) {
       // Build split element
-      val updatedLastElement = s"${previous.get.last} ${tokens.head.replace("\n", "")}"
+      val updatedLastElement = s"${previous.get.last} ${tokens.head.replace(Settings.lineSeparator, "")}"
       // Drop last element from the previous vector
       val updatedLastCSVLine = (previous.get.dropRight(1) :+ updatedLastElement) ++ tokens.tail
       accumulator.dropRight(1) :+ updatedLastCSVLine
@@ -130,5 +133,5 @@ object CSVParser {
    * @param token The string under examination
    * @return true is the number of quotes is even. false otherwise.
    */
-  private def areQuotesBalanced(token: String) = token.count(_ == '\"') % 2 == 0
+  private def areQuotesBalanced(token: String) = token.count(_ == Settings.quotingString) % 2 == 0
 }

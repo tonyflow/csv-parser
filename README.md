@@ -23,7 +23,7 @@ cell",b,"something else"
 - Part of field appears as quoted `"abc,"onetwo,three,doremi` 
 
 ## How to run
-Run the main class or the tests included in the test package
+Run the `ParserApp` class or the tests included in the test package
 
 ## Missing
 - The field delimiter, line separator and quoting string are configurable but have no default values.
@@ -35,3 +35,5 @@ and the performance was quite acceptable. The file is not included in the reposi
  not take into account simple fields in quotes.
  - Special cases in quotes cells will maintain the quotes after parsing i.e. The `LazyList` results will include
  the quotes. 
+- Multiple character encodings
+- More thorough testing
