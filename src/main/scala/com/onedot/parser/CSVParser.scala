@@ -1,7 +1,5 @@
 package com.onedot.parser
 
-import java.io.{File, RandomAccessFile}
-
 import com.onedot.helper.Settings
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
@@ -10,7 +8,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.io.Source
 import scala.util.matching.Regex
-import scala.util.matching.Regex.MatchIterator
 
 /**
  *
@@ -26,13 +23,14 @@ object CSVParser {
   private val NUMBER_OF_CHUNKS = 15
 
   /**
-   * Match empty fields in the beginning, the middle or the end of a line
+   * Match empty fields at end of a line
    */
-  private val MISSING_CELLS: Regex = "(^,)|(,,)|(,$)".r
   private val MISSING_CELLS_AT_THE_END: Regex = ",$".r
 
-
   /**
+   * The main API of the parser. Receives the name of the file - atm the file should be located under the main or test
+   * resources of the [[CSVParser]] project - and returns a stream of the results to be consumed by the client. The
+   * stream is represented by a LayList which will only be computed when actually needed.
    *
    * @param filename Name of the file to be processed
    * @return Returns a [[LazyList]] of [[Vector]]s. The [[Vector]]s represent the tuples the CSV fields have been mapped
@@ -80,15 +78,14 @@ object CSVParser {
     }
   }
 
-  private def areQuotesBalanced(token: String) = token.toCharArray.count(_ == '\"') % 2 == 0
+  private def areQuotesBalanced(token: String) = token.count(_ == '\"') % 2 == 0
 
   private def processLine(accumulator: LazyList[Vector[String]],
                           line: String): LazyList[Vector[String]] = {
+    // Start with the naive splitting - split at every delimiter
+    val naiveSplit = line.split(",").toVector
 
     // Identify line with missing cells
-
-    // Process field delimiters inside quoted text
-    val naiveSplit = line.split(",").toVector
     val potentiallyMissingElements = MISSING_CELLS_AT_THE_END.findFirstIn(line) match {
       case None => naiveSplit
       case Some(_) =>
@@ -97,9 +94,11 @@ object CSVParser {
         // ,a,b,,,,c, = Vector("","a","b","","","","c") :+ ""
         naiveSplit :+ ""
     }
+
+    // Process field delimiters inside quoted text
     val firstIndexOfDoubleQuote = potentiallyMissingElements.indexWhere(_.contains('\"'))
     val lastIndexOfDoubleQuote = potentiallyMissingElements.lastIndexWhere(_.contains('\"'))
-    val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1) {
+    val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1 && areQuotesBalanced(line)) {
       val start = potentiallyMissingElements.slice(0, firstIndexOfDoubleQuote)
       val tail = potentiallyMissingElements.slice(lastIndexOfDoubleQuote + 1, naiveSplit.size)
       val mergedCells = potentiallyMissingElements.slice(firstIndexOfDoubleQuote, lastIndexOfDoubleQuote + 1).mkString(Settings.fieldDelimiter)
