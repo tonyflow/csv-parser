@@ -3,6 +3,9 @@ package com.onedot.helper
 import com.onedot.helper.SettingConstants._
 import com.typesafe.config.ConfigFactory
 
+/**
+ *
+ */
 object Settings {
 
   private val config = ConfigFactory.load("parser")
@@ -12,7 +15,9 @@ object Settings {
 
 }
 
-
+/**
+ * Define configuration paths for [[CSVParser]] properties
+ */
 object SettingConstants {
   final val QUOTING_STRING = "csv.quoting-string"
   final val LINE_SEPARATOR = "csv.line-separator"
