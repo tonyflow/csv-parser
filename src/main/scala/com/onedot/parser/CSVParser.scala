@@ -29,6 +29,7 @@ object CSVParser {
    * Match empty fields in the beginning, the middle or the end of a line
    */
   private val MISSING_CELLS: Regex = "(^,)|(,,)|(,$)".r
+  private val MISSING_CELLS_AT_THE_END: Regex = ",$".r
 
 
   /**
@@ -85,38 +86,38 @@ object CSVParser {
                           line: String): LazyList[Vector[String]] = {
 
     // Identify line with missing cells
-    MISSING_CELLS.findAllIn(line) match {
-      case emptyIterator: MatchIterator if emptyIterator.isEmpty =>
-        // Process field delimiters inside quoted text
-        val naiveSplit = line.split(",").toVector
-        val firstIndexOfDoubleQuote = naiveSplit.indexWhere(_.contains('\"'))
-        val lastIndexOfDoubleQuote = naiveSplit.lastIndexWhere(_.contains('\"'))
-        val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1) {
-          val start = naiveSplit.slice(0, firstIndexOfDoubleQuote)
-          val tail = naiveSplit.slice(lastIndexOfDoubleQuote + 1, naiveSplit.size)
-          val mergedCells = naiveSplit.slice(firstIndexOfDoubleQuote, lastIndexOfDoubleQuote + 1).mkString(Settings.fieldDelimiter)
-          (start :+ mergedCells) ++ tail
-        } else {
-          naiveSplit
-        }
 
-        // Process new line characters embedded in quoted cell
-        val previous = accumulator.lastOption
-        if (!areQuotesBalanced(tokens.head) && previous.isDefined) {
-          // Build split element
-          val updatedLastElement = s"${previous.get.last} ${tokens.head.replace("\n", "")}"
-          // Drop last element from the previous vector
-          val updatedLastCSVLine = (previous.get.dropRight(1) :+ updatedLastElement) ++ tokens.tail
-          accumulator.dropRight(1) :+ updatedLastCSVLine
-        } else {
-          accumulator :+ tokens
-        }
-
-      case missingCells: MatchIterator =>
-        val it = for (cells <- missingCells) yield cells
-        it.toVector
-        accumulator
+    // Process field delimiters inside quoted text
+    val naiveSplit = line.split(",").toVector
+    val potentiallyMissingElements = MISSING_CELLS_AT_THE_END.findFirstIn(line) match {
+      case None => naiveSplit
+      case Some(_) =>
+        // Add one last element at the end of the list
+        // split will create empty string for all the other missing elements
+        // ,a,b,,,,c, = Vector("","a","b","","","","c") :+ ""
+        naiveSplit :+ ""
+    }
+    val firstIndexOfDoubleQuote = potentiallyMissingElements.indexWhere(_.contains('\"'))
+    val lastIndexOfDoubleQuote = potentiallyMissingElements.lastIndexWhere(_.contains('\"'))
+    val tokens = if (firstIndexOfDoubleQuote != -1 && lastIndexOfDoubleQuote != -1) {
+      val start = potentiallyMissingElements.slice(0, firstIndexOfDoubleQuote)
+      val tail = potentiallyMissingElements.slice(lastIndexOfDoubleQuote + 1, naiveSplit.size)
+      val mergedCells = potentiallyMissingElements.slice(firstIndexOfDoubleQuote, lastIndexOfDoubleQuote + 1).mkString(Settings.fieldDelimiter)
+      (start :+ mergedCells) ++ tail
+    } else {
+      potentiallyMissingElements
     }
 
+    // Process new line characters embedded in quoted cell
+    val previous = accumulator.lastOption
+    if (!areQuotesBalanced(tokens.head) && previous.isDefined) {
+      // Build split element
+      val updatedLastElement = s"${previous.get.last} ${tokens.head.replace("\n", "")}"
+      // Drop last element from the previous vector
+      val updatedLastCSVLine = (previous.get.dropRight(1) :+ updatedLastElement) ++ tokens.tail
+      accumulator.dropRight(1) :+ updatedLastCSVLine
+    } else {
+      accumulator :+ tokens
+    }
   }
 }
