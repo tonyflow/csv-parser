@@ -37,3 +37,4 @@ and the performance was quite acceptable. The file is not included in the reposi
  the quotes. 
 - Multiple character encodings
 - More thorough testing
+- Appropriate header handling. For now the header is just another entry in the `LazyList`.
