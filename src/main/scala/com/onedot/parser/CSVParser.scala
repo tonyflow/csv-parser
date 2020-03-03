@@ -14,6 +14,9 @@ import scala.util.matching.Regex
  */
 object CSVParser {
 
+  /**
+   * Main logger of the parser
+   */
   private final val logger: Logger = Logger(LoggerFactory.getLogger(getClass))
 
   /**
@@ -42,7 +45,8 @@ object CSVParser {
     val length = file.getLines().size
 
 
-    length / NUMBER_OF_CHUNKS match {
+    val batchSize = length / NUMBER_OF_CHUNKS
+    batchSize match {
       case 0 => //No need to create ranges since file is less than 15 lines long
         Future {
           Source.fromURL(url).getLines().foldLeft(LazyList.empty[Vector[String]]) {
@@ -55,7 +59,8 @@ object CSVParser {
         val ranges = Range(start = 0, end = length + 1, step = linesPerExecutor).iterator
           .sliding(2)
           .toVector
-          .map(twoElementList => (twoElementList.head, twoElementList.last)) // max + 1 since it is exclusive
+          // For the last batch, let the executor process the remaining lines: end = length
+          .map(twoElementList => (twoElementList.head, if (length - twoElementList.last < batchSize) length else twoElementList.last)) // max + 1 since it is exclusive
 
         val processedChunks = ranges.collect {
           case (start, end) =>
@@ -77,8 +82,6 @@ object CSVParser {
         Future.foldLeft(processedChunks)(LazyList.empty[Vector[String]])(_ ++ _)
     }
   }
-
-  private def areQuotesBalanced(token: String) = token.count(_ == '\"') % 2 == 0
 
   private def processLine(accumulator: LazyList[Vector[String]],
                           line: String): LazyList[Vector[String]] = {
@@ -119,4 +122,13 @@ object CSVParser {
       accumulator :+ tokens
     }
   }
+
+  /**
+   * Make sure the number of quotes in the given string is balanced. This can only be the case if we're talking about
+   * an even number of quotes
+   *
+   * @param token The string under examination
+   * @return true is the number of quotes is even. false otherwise.
+   */
+  private def areQuotesBalanced(token: String) = token.count(_ == '\"') % 2 == 0
 }
