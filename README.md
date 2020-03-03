@@ -1,6 +1,17 @@
 # CSV Parser
 ## Description
 This is a CSV parser including some special case handling
+### Before you use the API
+Make sure you have appropriately defined the configuration properties in `parser.conf`. For the time being, there are
+only 3 configuration properties
+```
+csv {
+   quoting-string = "
+   line-separator = \n
+   field-delimiter = ,
+   has-header = false
+}
+```
 ### Examples of special cases
 - Absent elements: `,a,b,,,,c,`
 - Field delimiters in quoted cells: `a,"b,c,d",e`
